@@ -1,13 +1,13 @@
 import { Client, RemoteAuth, Store } from 'whatsapp-web.js';
 import { Session } from '../types/Session';
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 
 class WhatsAppSessionManager {
-  private allSessions: Session;
+  public allSessions: Session;
+  public currentSession: string;
   private store: Store;
 
   /**
-   *
    * @param store
    */
   constructor(store: Store) {
@@ -19,9 +19,10 @@ class WhatsAppSessionManager {
    * Método para crear una nueva sesión de WhatsApp
    *
    * @param id
+   * @param server
    * @param socket
    */
-  public createSession(id: string, server: Server): void {
+  public createSession(id: string, server: Server, socket: Socket): void {
     const client = new Client({
       puppeteer: {
         headless: false,
@@ -40,28 +41,29 @@ class WhatsAppSessionManager {
 
     client.on('qr', (qr) => {
       console.log('QR Received', qr);
-      server.emit('qr', { qr, message: 'Code QR Generate' });
+      server.emit('[whatsapp]qr_obtained', { qr, message: 'Code QR Generate' });
     });
 
     client.on('authenticated', () => {
       console.log('AUTHENTICATED');
+      server.emit('[whatsapp]isAuth', { isAuth: true });
     });
 
-    client.on('auth_failure', (msg) => {
-      console.error('AUTHENTICATION FAILURE', msg);
+    client.on('auth_failure', () => {
+      console.error('AUTHENTICATION FAILURE');
+      server.emit('[whatsapp]isAuth', { isAuth: false });
     });
 
     client.on('ready', () => {
       console.log('Client is ready');
+      // Guardar la sesión en allSessions al estar lista
       this.allSessions[id] = client;
-      server.emit('ready', { id, message: 'Client is ready' });
+      server.emit('[whatsapp]isReady', { id, message: 'Client is ready' });
     });
 
     client.on('remote_session_saved', () => {
       console.log('remote_session_saved');
-      server.emit('remote_session_saved', {
-        message: 'remote_session_saved01',
-      });
+      server.emit('[whatsapp]remote_session_saved', { isRemoteAuth: true });
     });
 
     client.on('message', (msg) => {
@@ -83,9 +85,10 @@ class WhatsAppSessionManager {
    * Método para obtener una sesión de WhatsApp
    *
    * @param id
+   * @param server
    * @param socket
    */
-  public getSession(id: string, server: Server): void {
+  public getSession(id: string, server: Server, socket: Socket): void {
     const client = new Client({
       puppeteer: {
         headless: false,
@@ -127,6 +130,18 @@ class WhatsAppSessionManager {
    */
   public getAllSessions(): Session {
     return this.allSessions;
+  }
+
+  /**
+   * Método para obtener una sesión por su ID
+   *
+   * @param id
+   * @returns
+   */
+  public getSessionById(id: string): Client | null {
+    const session = this.allSessions[id] || null;
+    console.log(session);
+    return session;
   }
 }
 
