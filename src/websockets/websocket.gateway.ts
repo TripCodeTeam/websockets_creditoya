@@ -8,8 +8,9 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import initializeMongoStore from 'src/lib/MongoStore';
+import { initializeMongoStore } from 'src/lib/MongoStore';
 import WhatsAppSessionManager from 'src/lib/Whatsapp';
+import { createMessageTypes } from 'src/types/Session';
 
 @WebSocketGateway()
 export class WebsocketGateway
@@ -52,72 +53,27 @@ export class WebsocketGateway
   }
 
   @SubscribeMessage('createSession')
-  async CreateSession(
+  async handleCreateSession(
     @MessageBody() data: any,
     @ConnectedSocket() client: Socket,
   ) {
-    console.log(data);
-    this.whatsappSessionManager.createSession(data.id, this.server, client);
-  }
+    const { id } = data;
 
-  @SubscribeMessage('createMessages')
-  async SendMessage(
-    @MessageBody()
-    data: string,
-    @ConnectedSocket() client: Socket,
-  ) {
+    console.log(id);
+
+    if (!id) {
+      client.emit('error', 'No session ID provided');
+      return;
+    }
+
     try {
-      // Convierte la cadena JSON en un objeto JavaScript
-      const parsedData = JSON.parse(data);
-
-      console.log('SendMessage event received:', parsedData);
-
-      // Verifica si los contactos están definidos y son un arreglo
-      if (!parsedData.contacts || !Array.isArray(parsedData.contacts)) {
-        console.error(
-          'Contacts are not defined or not an array:',
-          parsedData.contacts,
-        );
-        return client.emit('[whatsapp]error', {
-          message: 'Invalid contacts data',
-        });
-      }
-
-      const session = this.whatsappSessionManager.getSessionById(
-        parsedData.sessionId,
-      );
-      if (session) {
-        parsedData.contacts.forEach((contact) => {
-          let formattedNumber = contact.number;
-          if (contact.number.startsWith('3') && contact.number.length === 10) {
-            formattedNumber = `57${contact.number}`;
-          }
-          session
-            .sendMessage(
-              `${formattedNumber}@c.us`,
-              `Hola ${contact.name}\n${parsedData.message}`,
-            )
-            .then((response) => {
-              console.log(`Message sent to ${contact.number}`, response);
-              client.emit('[whatsapp]messageSent', {
-                to: contact.number,
-                message: parsedData.message,
-              });
-            })
-            .catch((error) => {
-              console.log(`Failed to send message to ${contact.number}`, error);
-            });
-        });
-      } else {
-        console.error('Session not found:', parsedData.sessionId);
-      }
+      await this.whatsappSessionManager.createSession(id, this.server);
+      console.log(`Session created with ID: ${id}`);
     } catch (error) {
-      console.error('Failed to parse data:', error);
-      client.emit('[whatsapp]error', { message: 'Invalid JSON format' });
+      console.error(`Error creating session with ID: ${id}`, error);
+      client.emit('error', `Failed to create session with ID: ${id}`);
     }
   }
-
-  /* Connections from client */
 
   @SubscribeMessage('[whatsapp_client]entryNumbersPhone')
   async ReceivedPhones(
@@ -125,43 +81,103 @@ export class WebsocketGateway
     @ConnectedSocket() client: Socket,
   ) {
     console.log(data);
-    const sessionId = data.sessionId;
-    const phones = data.phones;
-    // const message = data.message;
 
-    // Obtener la sesión por ID utilizando el método getSessionById
-    const session = this.whatsappSessionManager.getSessionById(sessionId);
-
-    if (session) {
-      // Filtrar los números que comienzan con "3" (válidos para Colombia)
-      const validPhones = phones.filter((phoneNumber: string) =>
-        phoneNumber.startsWith('3'),
-      );
-
-      if (validPhones.length > 0) {
-        // Enviar mensajes a los números válidos
-        for (const phoneNumber of validPhones) {
-          try {
-            await session.sendMessage(
-              phoneNumber,
-              'Hola mensaje de prueba desde el servidor',
-            ); // Envía el mensaje a cada número válido
-            console.log(`Mensaje enviado a: ${phoneNumber}`);
-          } catch (error) {
-            console.error(
-              `Error al enviar el mensaje a: ${phoneNumber}`,
-              error,
-            );
-          }
-        }
-      } else {
-        console.log('No hay números válidos para enviar mensajes.');
-      }
-    } else {
-      console.log('Sesión no encontrada.');
+    // Validar que `data` tenga la estructura esperada
+    if (!data || !data.sessionId || !data.phones) {
+      console.error('Datos incompletos recibidos:', data);
+      client.emit('[whatsapp]sendVerifyPhones', {
+        send: false,
+        message: 'Datos incompletos recibidos.',
+      });
+      return;
     }
 
-    // Enviar una respuesta al cliente para confirmar que se recibieron los números
-    client.emit('[whatsapp]sendVerifyPhones', { message: 'received' });
+    const { sessionId, phones } = data;
+
+    // Verificar que `phones` sea un array
+    if (!Array.isArray(phones)) {
+      console.error(
+        'El formato de los números de teléfono no es correcto',
+        phones,
+      );
+      console.log('Números de teléfono recibidos:', phones);
+
+      client.emit('[whatsapp]sendVerifyPhones', {
+        send: false,
+        message: 'El formato de los números de teléfono no es correcto',
+      });
+      return;
+    }
+
+    // Obtener la sesión por ID
+    const session = this.whatsappSessionManager.getSessionById(sessionId);
+    if (!session) {
+      console.error('Sesión no encontrada:', sessionId);
+      client.emit('[whatsapp]sendVerifyPhones', {
+        send: false,
+        message: 'Sesión no encontrada.',
+      });
+      return;
+    }
+
+    // Verificar si el cliente está listo
+    if (!session.info || !session.pupPage) {
+      console.error('El cliente de la sesión no está listo:', sessionId);
+      client.emit('[whatsapp]sendVerifyPhones', {
+        send: false,
+        message: 'El cliente de la sesión no está listo.',
+      });
+      return;
+    }
+
+    const validPhones = phones
+      .map((phoneNumber: any) =>
+        typeof phoneNumber === 'string'
+          ? phoneNumber.replace(/\s+/g, '') // Eliminar espacios
+          : null,
+      )
+      .filter((phoneNumber: string | null) => phoneNumber !== null)
+      .map((phoneNumber) => {
+        // Formatear números como +57XXXXXXXXX@c.us
+        if (!phoneNumber.startsWith('+57')) {
+          phoneNumber = `+57${phoneNumber}`;
+        }
+        return `${phoneNumber.replace('+', '')}@c.us`; // Reemplazar '+' y agregar @c.us
+      });
+
+    // Luego, en la lógica de envío de mensajes
+    for (const phoneNumber of validPhones) {
+      try {
+        // Verificar si el usuario está registrado en WhatsApp
+        const isRegistered = await session.isRegisteredUser(phoneNumber);
+        if (!isRegistered) {
+          console.error(`Número no registrado en WhatsApp: ${phoneNumber}`);
+          client.emit('[whatsapp]sendVerifyPhones', {
+            send: false,
+            message: `El número ${phoneNumber} no está registrado en WhatsApp.`,
+          });
+          continue;
+        }
+
+        // Enviar el mensaje
+        await session.sendMessage(
+          phoneNumber,
+          'Hola mensaje de prueba desde el servidor',
+        );
+        console.log(`Mensaje enviado a: ${phoneNumber}`);
+      } catch (error) {
+        console.error(`Error al enviar el mensaje a: ${phoneNumber}`, error);
+        client.emit('[whatsapp]sendVerifyPhones', {
+          send: false,
+          message: `Error al enviar el mensaje a: ${phoneNumber}: ${error.message}`,
+        });
+      }
+    }
+
+    // Emitir confirmación de mensajes enviados
+    client.emit('[whatsapp]sendVerifyPhones', {
+      send: true,
+      message: 'Mensajes enviados',
+    });
   }
 }

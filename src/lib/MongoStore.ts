@@ -1,38 +1,27 @@
-import mongoose from 'mongoose';
-import { MongoStore } from 'wwebjs-mongo';
 import { ConfigService } from '@nestjs/config';
+import mongoose from 'mongoose';
+import { CustomSessionStore } from './CustoMongoStore';
 
-export async function initializeMongoStore(): Promise<typeof MongoStore> {
+export async function initializeMongoStore(): Promise<CustomSessionStore> {
   const configService = new ConfigService();
-
   const mongoUri = configService.get<string>('URI_MONGODB');
-  // console.log(mongoUri);
 
   if (!mongoUri)
     throw new Error('MongoDB URI is not defined in environment variables');
 
   // Configura Mongoose
-  mongoose.connect(mongoUri);
+  await mongoose.connect(mongoUri);
 
-  // Define un esquema para las sesiones de WhatsApp
-  const sessionSchema = new mongoose.Schema(
-    {
-      id: { type: String, required: true },
-      data: { type: String, required: true },
-    },
-    { timestamps: true },
-  );
-
-  const SessionModel = mongoose.model('Session', sessionSchema);
-
-  // Configura MongoStore para usar Mongoose
-  const store = new MongoStore({
-    collectionName: 'sessions', // Nombre de la colección para guardar sesiones
-    model: SessionModel,
-    mongoose,
+  mongoose.connection.on('error', (error) => {
+    console.error('MongoDB connection error:', error);
   });
 
-  return store;
-}
+  mongoose.connection.once('open', () => {
+    console.log('MongoDB connected successfully');
+  });
 
-export default initializeMongoStore;
+  // Configura CustomSessionStore
+  const sessionManager = new CustomSessionStore();
+
+  return sessionManager;
+}

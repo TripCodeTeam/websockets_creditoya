@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  websocket-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+    volumes:
+      - .:/usr/src/app/
+      - /usr/src/app/node_modules
+    restart: always
+     
