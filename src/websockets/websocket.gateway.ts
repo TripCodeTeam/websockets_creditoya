@@ -10,7 +10,6 @@ import {
 import { Server, Socket } from 'socket.io';
 import { initializeMongoStore } from 'src/lib/MongoStore';
 import WhatsAppSessionManager from 'src/lib/Whatsapp';
-import { createMessageTypes } from 'src/types/Session';
 
 @WebSocketGateway()
 export class WebsocketGateway
@@ -179,5 +178,48 @@ export class WebsocketGateway
       send: true,
       message: 'Mensajes enviados',
     });
+  }
+
+  @SubscribeMessage('[client]newLoan')
+  async NewLoan(@MessageBody() data: any, @ConnectedSocket() Client: Socket) {}
+
+  @SubscribeMessage('[client]newIssues')
+  async newIssues(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+    const { sessionId, titleIssue, descriptionIssue, ticketId } = data;
+
+    const session = this.whatsappSessionManager.getSessionById(sessionId);
+
+    // El número específico al que se enviará el mensaje
+    const phoneNumber = '3176051319';
+    const formattedPhone = `57${phoneNumber}@c.us`; // Formatear el número como +57XXXXXXXXX@c.us
+
+    try {
+      // Verificar si el usuario está registrado en WhatsApp
+      const isRegistered = await session.isRegisteredUser(formattedPhone);
+      if (!isRegistered) {
+        console.error(`Número no registrado en WhatsApp: ${formattedPhone}`);
+        client.emit('[whatsapp]sendVerifyPhones', {
+          send: false,
+          message: `El número ${formattedPhone} no está registrado en WhatsApp.`,
+        });
+        return;
+      }
+
+      // Organizar el mensaje con los datos recibidos
+      const message = `📌 *Nuevo Ticket*\n\n*Título:* ${titleIssue}\n*Descripción:* ${descriptionIssue}\n*ID del Ticket:* ${ticketId}`;
+
+      // Enviar el mensaje
+      await session.sendMessage(formattedPhone, message);
+      client.emit('[whatsapp]sendVerifyPhones', {
+        send: true,
+        message: `Mensaje enviado exitosamente a ${formattedPhone}.`,
+      });
+    } catch (error) {
+      console.error(`Error al enviar el mensaje a: ${formattedPhone}`, error);
+      client.emit('[whatsapp]sendVerifyPhones', {
+        send: false,
+        message: `Error al enviar el mensaje a ${formattedPhone}: ${error.message}`,
+      });
+    }
   }
 }
