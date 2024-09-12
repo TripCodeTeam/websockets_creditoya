@@ -1,6 +1,6 @@
 import { Client, LocalAuth } from 'whatsapp-web.js';
 import { Server } from 'socket.io';
-import { CustomSessionStore } from './CustoMongoStore'; // Ajusta la ruta si es necesario
+import { CustomSessionStore } from './CustoMongoStore';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -33,7 +33,6 @@ class WhatsAppSessionManager {
     try {
       const client = new Client({
         puppeteer: {
-          headless: true,
           args: ['--no-sandbox', '--disable-setuid-sandbox'],
         },
         authStrategy: new LocalAuth({
@@ -141,7 +140,6 @@ class WhatsAppSessionManager {
 
       const client = new Client({
         puppeteer: {
-          headless: true,
           args: ['--no-sandbox', '--disable-setuid-sandbox'],
         },
         authStrategy: new LocalAuth({
