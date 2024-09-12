@@ -1,5 +1,5 @@
 # Base image
-FROM node:20
+FROM node:18
 
 # Instalar dependencias necesarias para Puppeteer
 RUN apt-get update && apt-get install -y \
@@ -41,7 +41,6 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     xdg-utils \
     wget \
-    --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
