@@ -23,10 +23,7 @@ class WhatsAppSessionManager {
 
   public async createSession(id: string, server: Server): Promise<void> {
     // Ruta de sesiones
-    const isDevelopment = process.env.NODE_ENV !== 'production';
-    const sessionDirectory = isDevelopment
-      ? path.resolve(__dirname, '../../sessions') // Desarrollo
-      : path.resolve(__dirname, '../sessions'); // Producción
+    const sessionDirectory = path.resolve('/usr/src/app/session');
 
     console.log('Session Directory Path:', sessionDirectory);
 
@@ -56,8 +53,8 @@ class WhatsAppSessionManager {
         server.emit('[whatsapp]isAuth', { isAuth: true });
       });
 
-      client.on('auth_failure', () => {
-        console.error('AUTHENTICATION FAILURE');
+      client.on('auth_failure', (msg) => {
+        console.error('AUTHENTICATION FAILURE', msg);
         server.emit('[whatsapp]isAuth', { isAuth: false });
       });
 
@@ -106,10 +103,8 @@ class WhatsAppSessionManager {
   }
 
   public async loadSessions(): Promise<void> {
-    const isDevelopment = process.env.NODE_ENV !== 'production';
-    const sessionDir = isDevelopment
-      ? path.resolve(__dirname, '../../sessions') // Desarrollo
-      : path.resolve(__dirname, '../sessions'); // Producción
+    // Ruta de sesiones
+    const sessionDir = path.resolve('/usr/src/app/session');
 
     try {
       if (!fs.existsSync(sessionDir)) {
@@ -126,18 +121,16 @@ class WhatsAppSessionManager {
   }
 
   public async reconnectSession(id: string, server: Server): Promise<void> {
-    const isDevelopment = process.env.NODE_ENV !== 'production';
-    const sessionDir = isDevelopment
-      ? path.resolve(__dirname, '../../sessions') // Desarrollo
-      : path.resolve(__dirname, '../sessions'); // Producción
-
+    // Ruta de sesiones
+    const sessionDir = path.resolve('/usr/src/app/session');
+  
     try {
       if (!fs.existsSync(sessionDir)) {
         fs.mkdirSync(sessionDir, { recursive: true });
       }
-
+  
       console.log('Session Directory:', sessionDir);
-
+  
       const client = new Client({
         puppeteer: {
           args: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -147,9 +140,9 @@ class WhatsAppSessionManager {
           dataPath: sessionDir, // Almacena las sesiones localmente
         }),
       });
-
+  
       this.allSessions[id] = client;
-
+  
       client.on('ready', () => {
         console.log(`Reconnected to session: ${id}`);
         server.emit('[whatsapp]isReady', {
@@ -157,16 +150,17 @@ class WhatsAppSessionManager {
           message: 'Reconnected to session',
         });
       });
-
+  
       client.on('qr', (qr) => {
         server.emit('[whatsapp]qr_obtained', { qr });
       });
-
+  
       await client.initialize();
     } catch (error) {
       console.error('Error reconnecting session:', error);
     }
   }
+  
 
   public async sessionExists(options: { session: string }): Promise<boolean> {
     return this.allSessions[options.session] ? true : false;

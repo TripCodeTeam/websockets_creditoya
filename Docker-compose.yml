@@ -6,12 +6,15 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3001:3001"
+      - "3000:3000"
     environment:
       - NODE_ENV=production
-      - PORT=8080
+      - PORT=3000
     volumes:
       - .:/usr/src/app/
       - /usr/src/app/node_modules
+      - session-data:/usr/src/app/session
     restart: always
-     
+
+volumes:
+  session-data:

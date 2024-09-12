@@ -1,8 +1,9 @@
 # Base image
-FROM node:18
+FROM node:20
 
 # Instalar dependencias necesarias para Puppeteer
 RUN apt-get update && apt-get install -y \
+    chromium \
     gconf-service \
     libgbm-dev \
     libasound2 \
@@ -44,6 +45,9 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Configurar Puppeteer para usar Chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
 # Create app directory
 WORKDIR /usr/src/app
 
@@ -60,7 +64,7 @@ COPY . .
 RUN npm run build
 
 # Expose the port on which the app will run
-EXPOSE 3001
+EXPOSE 3000
 
 # Start the server using the production build
 CMD ["npm", "run", "start:prod"]
