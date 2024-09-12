@@ -37,16 +37,11 @@ class WhatsAppSessionManager {
     try {
       const client = new Client({
         puppeteer: {
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage', // Reduce uso de /dev/shm
-            '--disable-accelerated-2d-canvas',
-            '--disable-gpu',
-            '--disable-software-rasterizer',
-            '--single-process',
-            '--no-zygote',
-          ],
+          headless: false,
+          // args: [
+          //   '--no-sandbox',
+          //   '--disable-setuid-sandbox',
+          // ],
         },
         authStrategy: new LocalAuth({
           clientId: id,
