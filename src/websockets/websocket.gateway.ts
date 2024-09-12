@@ -58,8 +58,6 @@ export class WebsocketGateway
   ) {
     const { id } = data;
 
-    console.log(id);
-
     if (!id) {
       client.emit('error', 'No session ID provided');
       return;
