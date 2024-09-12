@@ -19,7 +19,7 @@ export class WebsocketGateway
   server: Server;
   socket: Socket;
 
-  private whatsappSessionManager: WhatsAppSessionManager;
+  private whatsappSessionManager: WhatsAppSessionManager | null = null;
 
   constructor() {
     this.initialize()
@@ -62,13 +62,13 @@ export class WebsocketGateway
     @MessageBody() data: any,
     @ConnectedSocket() client: Socket,
   ) {
-    const { id } = data;
-
     if (!this.whatsappSessionManager) {
       client.emit('error', 'WhatsAppSessionManager is not initialized');
       console.error('WhatsAppSessionManager is not initialized');
       return;
     }
+
+    const { id } = data;
 
     if (!id) {
       client.emit('error', 'No session ID provided');
