@@ -22,15 +22,31 @@ class WhatsAppSessionManager {
   }
 
   public async createSession(id: string, server: Server): Promise<void> {
+    console.log(`Attempting to create session with ID: ${id}`);
+
     // Ruta de sesiones
     const sessionDirectory = path.resolve('/usr/src/app/session');
-
     console.log('Session Directory Path:', sessionDirectory);
+
+    // Verifica si la sesión ya existe para evitar duplicados
+    if (this.allSessions[id]) {
+      console.log(`Session with ID ${id} already exists`);
+      return;
+    }
 
     try {
       const client = new Client({
         puppeteer: {
-          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage', // Reduce uso de /dev/shm
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
+            '--disable-software-rasterizer',
+            '--single-process',
+            '--no-zygote',
+          ],
         },
         authStrategy: new LocalAuth({
           clientId: id,
@@ -38,6 +54,7 @@ class WhatsAppSessionManager {
         }),
       });
 
+      // Guarda el cliente en las sesiones
       this.allSessions[id] = client;
 
       client.on('qr', (qr) => {
@@ -60,10 +77,13 @@ class WhatsAppSessionManager {
 
       client.on('ready', () => {
         console.log('Client is ready');
+
+        // Asegúrate de que la sesión esté guardada
         if (!this.allSessions[id]) {
           this.allSessions[id] = client;
           console.log('Sesión guardada:', this.allSessions);
         }
+
         server.emit('[whatsapp]isReady', {
           id,
           message: 'La sesión está lista',
@@ -81,9 +101,21 @@ class WhatsAppSessionManager {
         }
       });
 
+      // Inicializa el cliente de WhatsApp
       await client.initialize();
     } catch (error) {
       console.error('Error initializing client:', error);
+
+      // Limpia la sesión si falla la inicialización
+      if (this.allSessions[id]) {
+        delete this.allSessions[id];
+      }
+
+      // Notifica al cliente sobre el error
+      server.emit('[whatsapp]error', {
+        id,
+        message: `Error initializing session: ${error.message}`,
+      });
     }
   }
 
@@ -123,14 +155,14 @@ class WhatsAppSessionManager {
   public async reconnectSession(id: string, server: Server): Promise<void> {
     // Ruta de sesiones
     const sessionDir = path.resolve('/usr/src/app/session');
-  
+
     try {
       if (!fs.existsSync(sessionDir)) {
         fs.mkdirSync(sessionDir, { recursive: true });
       }
-  
+
       console.log('Session Directory:', sessionDir);
-  
+
       const client = new Client({
         puppeteer: {
           args: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -140,9 +172,9 @@ class WhatsAppSessionManager {
           dataPath: sessionDir, // Almacena las sesiones localmente
         }),
       });
-  
+
       this.allSessions[id] = client;
-  
+
       client.on('ready', () => {
         console.log(`Reconnected to session: ${id}`);
         server.emit('[whatsapp]isReady', {
@@ -150,17 +182,16 @@ class WhatsAppSessionManager {
           message: 'Reconnected to session',
         });
       });
-  
+
       client.on('qr', (qr) => {
         server.emit('[whatsapp]qr_obtained', { qr });
       });
-  
+
       await client.initialize();
     } catch (error) {
       console.error('Error reconnecting session:', error);
     }
   }
-  
 
   public async sessionExists(options: { session: string }): Promise<boolean> {
     return this.allSessions[options.session] ? true : false;

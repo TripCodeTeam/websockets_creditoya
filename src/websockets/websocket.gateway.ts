@@ -62,6 +62,7 @@ export class WebsocketGateway
     @MessageBody() data: any,
     @ConnectedSocket() client: Socket,
   ) {
+    console.log('createSession event received:', data);
     if (!this.whatsappSessionManager) {
       client.emit('error', 'WhatsAppSessionManager is not initialized');
       console.error('WhatsAppSessionManager is not initialized');
