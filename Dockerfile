@@ -1,11 +1,14 @@
-# Base image
-FROM node:20
+FROM ubuntu:20.04
 
-# Instalar dependencias necesarias para Puppeteer
+ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get install -y \
-    chromium \
-    gconf-service \
-    libgbm-dev \
+    curl \
+    wget \
+    gnupg \
+    ca-certificates \
+    libnss3 \
+    libxss1 \
     libasound2 \
     libatk1.0-0 \
     libc6 \
@@ -26,6 +29,7 @@ RUN apt-get update && apt-get install -y \
     libx11-6 \
     libx11-xcb1 \
     libxcb1 \
+    libxcomposite1 \
     libxcursor1 \
     libxdamage1 \
     libxext6 \
@@ -35,18 +39,21 @@ RUN apt-get update && apt-get install -y \
     libxrender1 \
     libxss1 \
     libxtst6 \
-    ca-certificates \
-    fonts-liberation \
-    libappindicator1 \
-    libnss3 \
     lsb-release \
     xdg-utils \
-    wget \
-    && apt-get clean \
+    fonts-liberation \
+    libappindicator1 \
+    libgbm-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Configurar Puppeteer para usar Chromium
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \ 
+    && echo "deb http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list
+RUN apt-get update && apt-get -y install google-chrome-stable
+
+RUN curl -sL https://deb.nodesource.com/setup_18.x | bash -
+RUN apt-get install -y nodejs
+
+RUN mkdir -p /usr/src/app
 
 # Create app directory
 WORKDIR /usr/src/app
