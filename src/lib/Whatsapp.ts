@@ -38,10 +38,10 @@ class WhatsAppSessionManager {
       const client = new Client({
         puppeteer: {
           headless: false,
-          // args: [
-          //   '--no-sandbox',
-          //   '--disable-setuid-sandbox',
-          // ],
+          args: [
+            '--no-sandbox',
+            // '--disable-setuid-sandbox',
+          ],
         },
         authStrategy: new LocalAuth({
           clientId: id,
