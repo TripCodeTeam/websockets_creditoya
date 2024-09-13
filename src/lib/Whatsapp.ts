@@ -79,8 +79,18 @@ class WhatsAppSessionManager {
         }
       });
 
-      // Inicializa el cliente de WhatsApp
+      client.on('disconnected', (reason) => {
+        console.error('Client was disconnected', reason);
+        delete this.allSessions[id];
+        server.emit('[whatsapp]disconnected', {
+          id,
+          message: `Client was disconnected: ${reason}`,
+        });
+      });
+
+      console.log('Initializing client...');
       await client.initialize();
+      console.log('Client initialized successfully');
     } catch (error) {
       console.error('Error initializing client:', error);
 
