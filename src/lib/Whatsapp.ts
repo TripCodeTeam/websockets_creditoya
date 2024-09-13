@@ -22,6 +22,7 @@ class WhatsAppSessionManager {
       const client = new Client({
         puppeteer: {
           headless: true,
+          executablePath: '/usr/bin/google-chrome',
           args: ['--no-sandbox'],
         },
         authStrategy: new NoAuth(), // Usando NoAuth, sin persistencia
