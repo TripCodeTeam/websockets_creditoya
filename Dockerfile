@@ -58,7 +58,7 @@ WORKDIR /usr/src/app
 # Copia los archivos de configuración de npm
 COPY package*.json ./
 
-# Instala las dependencias de la aplicación
+# Instala las dependencias de la aplicación, incluyendo Puppeteer
 RUN npm install
 
 # Copia el código fuente de la aplicación
