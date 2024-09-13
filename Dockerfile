@@ -1,5 +1,9 @@
 FROM node:18
 
+# Evita la descarga de Chromium por Puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD true
+
+# Instala Google Chrome y las dependencias necesarias
 RUN apt-get update \
     && apt-get install -y \
     gconf-service \
@@ -40,25 +44,31 @@ RUN apt-get update \
     libnss3 \
     lsb-release \
     xdg-utils \
+    curl \
+    gnupg \
+    && curl -sSL https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
+# Crea el directorio de la aplicación
 WORKDIR /usr/src/app
 
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
+# Copia los archivos de configuración de npm
 COPY package*.json ./
 
-# Install app dependencies
+# Instala las dependencias de la aplicación
 RUN npm install
 
-# Bundle app source
+# Copia el código fuente de la aplicación
 COPY . .
 
-# Creates a "dist" folder with the production build
+# Crea una carpeta "dist" con la build de producción
 RUN npm run build
 
-# Expose the port on which the app will run
+# Expone el puerto en el que se ejecutará la aplicación
 EXPOSE 3000
 
-# Start the server using the production build
+# Inicia el servidor usando la build de producción
 CMD ["npm", "run", "start:prod"]
