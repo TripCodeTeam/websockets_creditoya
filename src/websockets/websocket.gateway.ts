@@ -9,6 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import WhatsAppSessionManager from 'src/lib/Whatsapp';
+import { exec } from 'child_process';
 
 @WebSocketGateway()
 export class WebsocketGateway
@@ -230,5 +231,30 @@ export class WebsocketGateway
         message: `Error al enviar el mensaje a ${formattedPhone}: ${error.message}`,
       });
     }
+  }
+
+  // Evento para reiniciar el servidor
+  @SubscribeMessage('restartServer')
+  async handleRestartServer(
+    @MessageBody() data: any,
+    @ConnectedSocket() client: Socket,
+  ) {
+    console.log('Reinicio solicitado por el cliente:', data);
+
+    // Aquí emitimos una respuesta al cliente antes de proceder con el reinicio
+    client.emit('serverRestarting', {
+      message: 'El servidor se está reiniciando...',
+    });
+
+    // Ejecutar un comando para reiniciar el proceso de Node.js
+    exec('pm2 restart all', (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error reiniciando el servidor: ${error.message}`);
+        client.emit('error', 'Error al intentar reiniciar el servidor');
+        return;
+      }
+
+      console.log(`Servidor reiniciado con éxito: ${stdout}`);
+    });
   }
 }

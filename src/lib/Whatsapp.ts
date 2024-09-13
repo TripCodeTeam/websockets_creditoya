@@ -1,14 +1,28 @@
 import { Client, NoAuth } from 'whatsapp-web.js';
 import { Server } from 'socket.io';
 
+/**
+ * Gestor de sesiones de WhatsApp para manejar múltiples instancias de clientes de WhatsApp.
+ */
 class WhatsAppSessionManager {
   public allSessions: Record<string, Client> = {};
   private sessionDirectory: string;
 
+  /**
+   * Inicializa el gestor de sesiones de WhatsApp.
+   */
   constructor() {
     console.log('WhatsAppSessionManager initialized');
   }
 
+  /**
+   * Crea una nueva sesión de WhatsApp asociada a un ID y la guarda en memoria.
+   * Emite eventos de WebSocket para QR, autenticación, y estado del cliente.
+   *
+   * @param {string} id - Identificador único de la sesión.
+   * @param {Server} server - Instancia de servidor Socket.io para emitir eventos.
+   * @returns {Promise<void>}
+   */
   public async createSession(id: string, server: Server): Promise<void> {
     console.log(`Attempting to create session with ID: ${id}`);
 
@@ -107,6 +121,12 @@ class WhatsAppSessionManager {
     }
   }
 
+  /**
+   * Obtiene una sesión de WhatsApp existente por su ID.
+   *
+   * @param {string} id - Identificador de la sesión.
+   * @returns {Client | null} - Cliente de WhatsApp si la sesión existe, o null si no existe.
+   */
   public getSessionById(id: string): Client | null {
     const session = this.allSessions[id];
     if (session) {
@@ -117,6 +137,13 @@ class WhatsAppSessionManager {
     return session || null;
   }
 
+  /**
+   * Elimina una sesión de WhatsApp de la memoria.
+   *
+   * @param {Object} options - Opciones para eliminar la sesión.
+   * @param {string} options.session - Identificador de la sesión a eliminar.
+   * @returns {Promise<void>}
+   */
   public async delete(options: { session: string }): Promise<void> {
     if (this.allSessions[options.session]) {
       delete this.allSessions[options.session];
