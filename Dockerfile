@@ -1,74 +1,26 @@
-FROM node:18
+# Usa la imagen de Zenika con soporte para Puppeteer
+FROM zenika/alpine-chrome:with-puppeteer
 
-# Evita la descarga de Chromium por Puppeteer
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD true
-
-# Instala Google Chrome y las dependencias necesarias
-RUN apt-get update \
-    && apt-get install -y \
-    gconf-service \
-    libgbm-dev \
-    libasound2 \
-    libatk1.0-0 \
-    libc6 \
-    libcairo2 \
-    libcups2 \
-    libdbus-1-3 \
-    libexpat1 \
-    libfontconfig1 \
-    libgcc1 \
-    libgconf-2-4 \
-    libgdk-pixbuf2.0-0 \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    libnspr4 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libstdc++6 \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrandr2 \
-    libxrender1 \
-    libxss1 \
-    libxtst6 \
-    ca-certificates \
-    fonts-liberation \
-    libappindicator1 \
-    libnss3 \
-    lsb-release \
-    xdg-utils \
-    curl \
-    gnupg \
-    && curl -sSL https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
-
-# Crea el directorio de la aplicación
+# Establece el directorio de trabajo dentro del contenedor
 WORKDIR /usr/src/app
 
-# Copia los archivos de configuración de npm
-COPY package*.json ./
+# Cambia al usuario 'chrome' antes de copiar e instalar
+USER chrome
 
-# Instala las dependencias de la aplicación, incluyendo Puppeteer
+# Copia los archivos package.json y package-lock.json para la instalación de npm
+COPY --chown=chrome:chrome package*.json ./
+
+# Instala las dependencias
 RUN npm install
 
-# Copia el código fuente de la aplicación
-COPY . .
+# Copia el resto de los archivos de la aplicación al contenedor
+COPY --chown=chrome:chrome . .
 
-# Crea una carpeta "dist" con la build de producción
+# Construye la aplicación NestJS
 RUN npm run build
 
-# Expone el puerto en el que se ejecutará la aplicación
+# Expone los puertos necesarios
 EXPOSE 3000
 
-# Inicia el servidor usando la build de producción
+# Establece el comando para ejecutar tu aplicación NestJS en modo producción
 CMD ["npm", "run", "start:prod"]
