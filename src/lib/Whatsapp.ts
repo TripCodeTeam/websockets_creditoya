@@ -21,7 +21,8 @@ class WhatsAppSessionManager {
     try {
       const client = new Client({
         puppeteer: {
-          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+          headless: true,
+          args: ['--no-sandbox'],
         },
         authStrategy: new NoAuth(), // Usando NoAuth, sin persistencia
       });
