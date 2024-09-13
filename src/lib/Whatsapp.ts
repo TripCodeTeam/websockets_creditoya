@@ -22,7 +22,7 @@ class WhatsAppSessionManager {
       const client = new Client({
         puppeteer: {
           headless: true,
-          executablePath: '/usr/bin/google-chrome',
+          executablePath: 'chromium-browser',
           args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
