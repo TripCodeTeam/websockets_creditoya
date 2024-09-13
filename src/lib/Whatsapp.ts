@@ -23,7 +23,7 @@ class WhatsAppSessionManager {
         puppeteer: {
           headless: true,
           executablePath: '/usr/bin/google-chrome',
-          args: ['--no-sandbox'],
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
         },
         authStrategy: new NoAuth(), // Usando NoAuth, sin persistencia
       });
