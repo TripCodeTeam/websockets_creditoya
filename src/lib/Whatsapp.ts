@@ -1,32 +1,16 @@
-import { Client, LocalAuth } from 'whatsapp-web.js';
+import { Client, NoAuth } from 'whatsapp-web.js';
 import { Server } from 'socket.io';
-import { CustomSessionStore } from './CustoMongoStore';
-import * as path from 'path';
-import * as fs from 'fs';
 
 class WhatsAppSessionManager {
   public allSessions: Record<string, Client> = {};
-  private store: CustomSessionStore;
   private sessionDirectory: string;
 
-  constructor(store: CustomSessionStore) {
-    this.store = store;
-
-    // Determinar el directorio de sesiones basado en el entorno
-    const isProduction = process.env.NODE_ENV === 'production';
-
-    this.sessionDirectory = isProduction
-      ? path.resolve(__dirname, '../../sessions')
-      : path.resolve(process.cwd(), 'sessions'); // En desarrollo
-    this.loadSessions();
+  constructor() {
+    console.log('WhatsAppSessionManager initialized');
   }
 
   public async createSession(id: string, server: Server): Promise<void> {
     console.log(`Attempting to create session with ID: ${id}`);
-
-    // Ruta de sesiones
-    const sessionDirectory = path.resolve('/usr/src/app/session');
-    console.log('Session Directory Path:', sessionDirectory);
 
     // Verifica si la sesión ya existe para evitar duplicados
     if (this.allSessions[id]) {
@@ -39,10 +23,7 @@ class WhatsAppSessionManager {
         puppeteer: {
           args: ['--no-sandbox', '--disable-setuid-sandbox'],
         },
-        authStrategy: new LocalAuth({
-          clientId: id,
-          dataPath: sessionDirectory, // Almacena las sesiones localmente
-        }),
+        authStrategy: new NoAuth(), // Usando NoAuth, sin persistencia
       });
 
       // Guarda el cliente en las sesiones
@@ -69,7 +50,7 @@ class WhatsAppSessionManager {
       client.on('ready', () => {
         console.log('Client is ready');
 
-        // Asegúrate de que la sesión esté guardada
+        // Asegúrate de que la sesión esté guardada en memoria
         if (!this.allSessions[id]) {
           this.allSessions[id] = client;
           console.log('Sesión guardada:', this.allSessions);
@@ -110,11 +91,6 @@ class WhatsAppSessionManager {
     }
   }
 
-  public saveSession(id: string, client: Client): void {
-    this.allSessions[id] = client;
-    console.log(`Session ${id} saved in memory`);
-  }
-
   public getSessionById(id: string): Client | null {
     const session = this.allSessions[id];
     if (session) {
@@ -125,82 +101,87 @@ class WhatsAppSessionManager {
     return session || null;
   }
 
-  public async loadSessions(): Promise<void> {
-    // Ruta de sesiones
-    const sessionDir = path.resolve('/usr/src/app/session');
-
-    try {
-      if (!fs.existsSync(sessionDir)) {
-        fs.mkdirSync(sessionDir, { recursive: true });
-      }
-
-      console.log('Session Directory:', sessionDir);
-
-      // Carga las sesiones en memoria (LocalAuth cargará las sesiones automáticamente)
-      console.log('Sessions loaded into memory:', this.allSessions);
-    } catch (error) {
-      console.error('Error loading sessions:', error);
-    }
-  }
-
-  public async reconnectSession(id: string, server: Server): Promise<void> {
-    // Ruta de sesiones
-    const sessionDir = path.resolve('/usr/src/app/session');
-
-    try {
-      if (!fs.existsSync(sessionDir)) {
-        fs.mkdirSync(sessionDir, { recursive: true });
-      }
-
-      console.log('Session Directory:', sessionDir);
-
-      const client = new Client({
-        puppeteer: {
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-          ],
-        },
-        authStrategy: new LocalAuth({
-          clientId: id,
-          dataPath: sessionDir, // Almacena las sesiones localmente
-        }),
-      });
-
-      this.allSessions[id] = client;
-
-      client.on('ready', () => {
-        console.log(`Reconnected to session: ${id}`);
-        server.emit('[whatsapp]isReady', {
-          id,
-          message: 'Reconnected to session',
-        });
-      });
-
-      client.on('qr', (qr) => {
-        server.emit('[whatsapp]qr_obtained', { qr });
-      });
-
-      await client.initialize();
-    } catch (error) {
-      console.error('Error reconnecting session:', error);
-    }
-  }
-
-  public async sessionExists(options: { session: string }): Promise<boolean> {
-    return this.allSessions[options.session] ? true : false;
-  }
-
-  public async getSession(options: { session: string }): Promise<any> {
-    return this.allSessions[options.session] || null;
-  }
-
   public async delete(options: { session: string }): Promise<void> {
     if (this.allSessions[options.session]) {
       delete this.allSessions[options.session];
       console.log(`Session ${options.session} deleted from memory`);
     }
   }
+
+  // public saveSession(id: string, client: Client): void {
+  //   this.allSessions[id] = client;
+  //   console.log(`Session ${id} saved in memory`);
+  // }
+
+  // public async loadSessions(): Promise<void> {
+  //   // Ruta de sesiones
+  //   const sessionDir = path.resolve('/usr/src/app/session');
+
+  //   try {
+  //     if (!fs.existsSync(sessionDir)) {
+  //       fs.mkdirSync(sessionDir, { recursive: true });
+  //     }
+
+  //     console.log('Session Directory:', sessionDir);
+
+  //     // Carga las sesiones en memoria (LocalAuth cargará las sesiones automáticamente)
+  //     console.log('Sessions loaded into memory:', this.allSessions);
+  //   } catch (error) {
+  //     console.error('Error loading sessions:', error);
+  //   }
+  // }
+
+  // public async reconnectSession(id: string, server: Server): Promise<void> {
+  //   // Ruta de sesiones
+  //   const sessionDir = path.resolve('/usr/src/app/session');
+
+  //   try {
+  //     if (!fs.existsSync(sessionDir)) {
+  //       fs.mkdirSync(sessionDir, { recursive: true });
+  //     }
+
+  //     console.log('Session Directory:', sessionDir);
+
+  //     const client = new Client({
+  //       puppeteer: {
+  //         args: [
+  //           '--no-sandbox',
+  //           '--disable-setuid-sandbox',
+  //         ],
+  //       },
+  //       authStrategy: new LocalAuth({
+  //         clientId: id,
+  //         dataPath: sessionDir, // Almacena las sesiones localmente
+  //       }),
+  //     });
+
+  //     this.allSessions[id] = client;
+
+  //     client.on('ready', () => {
+  //       console.log(`Reconnected to session: ${id}`);
+  //       server.emit('[whatsapp]isReady', {
+  //         id,
+  //         message: 'Reconnected to session',
+  //       });
+  //     });
+
+  //     client.on('qr', (qr) => {
+  //       server.emit('[whatsapp]qr_obtained', { qr });
+  //     });
+
+  //     await client.initialize();
+  //   } catch (error) {
+  //     console.error('Error reconnecting session:', error);
+  //   }
+  // }
+
+  // public async sessionExists(options: { session: string }): Promise<boolean> {
+  //   return this.allSessions[options.session] ? true : false;
+  // }
+
+  // public async getSession(options: { session: string }): Promise<any> {
+  //   return this.allSessions[options.session] || null;
+  // }
 }
 
 export default WhatsAppSessionManager;

@@ -8,7 +8,6 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { initializeMongoStore } from 'src/lib/MongoStore';
 import WhatsAppSessionManager from 'src/lib/Whatsapp';
 
 @WebSocketGateway()
@@ -33,8 +32,7 @@ export class WebsocketGateway
 
   async initialize() {
     try {
-      const store = await initializeMongoStore();
-      this.whatsappSessionManager = new WhatsAppSessionManager(store);
+      this.whatsappSessionManager = new WhatsAppSessionManager();
     } catch (error) {
       console.error('Error initializing MongoStore:', error);
     }

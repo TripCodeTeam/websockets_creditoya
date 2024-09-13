@@ -14,11 +14,3 @@ export interface createMessageTypes {
   contacts: contactsTypes[];
   message: string;
 }
-
-export interface CustomSessionStore {
-  sessionExists(options: { session: string }): Promise<boolean>;
-  getSession(options: { session: string }): Promise<any>;
-  save(options: { session: string; data: any }): Promise<void>;
-  delete(options: { session: string }): Promise<void>;
-  extract(session: any): any;
-}

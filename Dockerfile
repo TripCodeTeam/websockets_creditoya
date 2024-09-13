@@ -1,14 +1,9 @@
-FROM ubuntu:20.04
+FROM node:latest
 
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && apt-get install -y \
-    curl \
-    wget \
-    gnupg \
-    ca-certificates \
-    libnss3 \
-    libxss1 \
+RUN apt-get update \
+    && apt-get install -y \
+    gconf-service \
+    libgbm-dev \
     libasound2 \
     libatk1.0-0 \
     libc6 \
@@ -39,21 +34,13 @@ RUN apt-get update && apt-get install -y \
     libxrender1 \
     libxss1 \
     libxtst6 \
-    lsb-release \
-    xdg-utils \
+    ca-certificates \
     fonts-liberation \
     libappindicator1 \
-    libgbm-dev \
+    libnss3 \
+    lsb-release \
+    xdg-utils \
     && rm -rf /var/lib/apt/lists/*
-
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \ 
-    && echo "deb http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list
-RUN apt-get update && apt-get -y install google-chrome-stable
-
-RUN curl -sL https://deb.nodesource.com/setup_18.x | bash -
-RUN apt-get install -y nodejs
-
-RUN mkdir -p /usr/src/app
 
 # Create app directory
 WORKDIR /usr/src/app
