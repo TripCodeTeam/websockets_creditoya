@@ -14,3 +14,11 @@ export interface createMessageTypes {
   contacts: contactsTypes[];
   message: string;
 }
+
+export type messageReq = {
+  sessionId: string;
+  phones: [x: string];
+  names: string;
+  message: string;
+  files: string[];
+};

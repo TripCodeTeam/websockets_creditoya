@@ -4,7 +4,13 @@ FROM zenika/alpine-chrome:with-puppeteer
 # Establece el directorio de trabajo
 WORKDIR /usr/src/app
 
-# Cambia al usuario 'chrome'
+# Cambia temporalmente al usuario 'root' para instalar pm2
+USER root
+
+# Instala PM2 globalmente
+RUN npm install -g pm2
+
+# Cambia nuevamente al usuario 'chrome'
 USER chrome
 
 # Copia los archivos package.json y package-lock.json
@@ -31,5 +37,5 @@ RUN npm run build
 # Exponer el puerto necesario
 EXPOSE 3000
 
-# Ejecuta la aplicación en modo producción
-CMD ["npm", "run", "start:prod"]
+# Configura PM2 para ejecutar la aplicación
+CMD ["pm2-runtime", "npm", "--", "run", "start:prod"]

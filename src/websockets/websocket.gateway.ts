@@ -10,6 +10,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import WhatsAppSessionManager from 'src/lib/Whatsapp';
 import { exec } from 'child_process';
+import { MessageMedia } from 'whatsapp-web.js';
 
 @WebSocketGateway()
 export class WebsocketGateway
@@ -18,6 +19,9 @@ export class WebsocketGateway
   @WebSocketServer()
   server: Server;
   socket: Socket;
+
+  private qrGenerationAttemps = 0;
+  private readonly MAX_QR_ATTEMPS = 10;
 
   private whatsappSessionManager: WhatsAppSessionManager | null = null;
 
@@ -75,8 +79,15 @@ export class WebsocketGateway
       return;
     }
 
+    if (this.qrGenerationAttemps >= this.MAX_QR_ATTEMPS) {
+      client.emit('error', 'QR code generation limit reached');
+      console.error('QR code generation limit reached');
+      return;
+    }
+
     try {
       await this.whatsappSessionManager.createSession(id, this.server);
+      this.qrGenerationAttemps++;
       console.log(`Session created with ID: ${id}`);
     } catch (error) {
       console.error(`Error creating session with ID: ${id}`, error);
@@ -92,88 +103,106 @@ export class WebsocketGateway
     console.log(data);
 
     // Validar que `data` tenga la estructura esperada
-    if (!data || !data.sessionId || !data.phones) {
-      console.error('Datos incompletos recibidos:', data);
+    if (
+      !data ||
+      !data.sessionId ||
+      !Array.isArray(data.phones) ||
+      !Array.isArray(data.names) ||
+      !Array.isArray(data.files) // Asegúrate de validar que `files` es un array
+    ) {
+      const errorMessage = 'Datos incompletos o formato incorrecto.';
+      console.error(errorMessage, data);
       client.emit('[whatsapp]sendVerifyPhones', {
         send: false,
-        message: 'Datos incompletos recibidos.',
+        message: errorMessage,
       });
       return;
     }
 
-    const { sessionId, phones } = data;
+    const {
+      sessionId,
+      phones,
+      names,
+      message,
+      files, // `files` será un array de archivos en formato base64
+    }: {
+      sessionId: string;
+      phones: string[];
+      names: string[];
+      message?: string;
+      files: { name: string; type: string; data: string }[]; // Archivos en formato base64
+    } = data;
 
-    // Verificar que `phones` sea un array
-    if (!Array.isArray(phones)) {
-      console.error(
-        'El formato de los números de teléfono no es correcto',
-        phones,
-      );
-      console.log('Números de teléfono recibidos:', phones);
-
-      client.emit('[whatsapp]sendVerifyPhones', {
-        send: false,
-        message: 'El formato de los números de teléfono no es correcto',
-      });
-      return;
-    }
+    console.log(sessionId);
+    console.log(phones);
+    console.log(names);
+    console.log(message);
+    console.log(files);
 
     // Obtener la sesión por ID
     const session = this.whatsappSessionManager.getSessionById(sessionId);
-    if (!session) {
-      console.error('Sesión no encontrada:', sessionId);
+    if (!session || !session.info || !session.pupPage) {
+      const sessionError = !session
+        ? 'Sesión no encontrada.'
+        : 'El cliente de la sesión no está listo.';
+      console.error(sessionError, sessionId);
       client.emit('[whatsapp]sendVerifyPhones', {
         send: false,
-        message: 'Sesión no encontrada.',
+        message: sessionError,
       });
       return;
     }
 
-    // Verificar si el cliente está listo
-    if (!session.info || !session.pupPage) {
-      console.error('El cliente de la sesión no está listo:', sessionId);
-      client.emit('[whatsapp]sendVerifyPhones', {
-        send: false,
-        message: 'El cliente de la sesión no está listo.',
-      });
-      return;
-    }
-
+    // Normalizar y validar números de teléfono
     const validPhones = phones
-      .map((phoneNumber: any) =>
-        typeof phoneNumber === 'string'
-          ? phoneNumber.replace(/\s+/g, '') // Eliminar espacios
-          : null,
+      .map((phoneNumber: string) =>
+        phoneNumber.replace(/\s+/g, '').startsWith('+57')
+          ? phoneNumber
+          : `+57${phoneNumber}`,
       )
-      .filter((phoneNumber: string | null) => phoneNumber !== null)
-      .map((phoneNumber) => {
-        // Formatear números como +57XXXXXXXXX@c.us
-        if (!phoneNumber.startsWith('+57')) {
-          phoneNumber = `+57${phoneNumber}`;
-        }
-        return `${phoneNumber.replace('+', '')}@c.us`; // Reemplazar '+' y agregar @c.us
-      });
+      .map((phoneNumber) => `${phoneNumber.replace('+', '')}@c.us`);
 
-    // Luego, en la lógica de envío de mensajes
-    for (const phoneNumber of validPhones) {
+    const sendFile = async (
+      file: { name: string; type: string; data: string }, // Tipo compatible
+      phoneNumber: string,
+    ) => {
       try {
-        // Verificar si el usuario está registrado en WhatsApp
-        const isRegistered = await session.isRegisteredUser(phoneNumber);
-        if (!isRegistered) {
+        // Convertir base64 a Buffer
+        const buffer = Buffer.from(file.data, 'base64');
+        const media = new MessageMedia(
+          file.type,
+          buffer.toString('base64'),
+          file.name,
+        );
+        await session.sendMessage(phoneNumber, '', { media });
+        console.log(`Archivo enviado a: ${phoneNumber}`);
+      } catch (error) {
+        console.error(`Error al enviar el archivo a: ${phoneNumber}`, error);
+        client.emit('[whatsapp]sendVerifyPhones', {
+          send: false,
+          message: `Error al enviar el archivo a: ${phoneNumber}: ${error.message}`,
+        });
+      }
+    };
+
+    const sendMessageAndFiles = async (phoneNumber: string, name: string) => {
+      try {
+        if (!(await session.isRegisteredUser(phoneNumber))) {
           console.error(`Número no registrado en WhatsApp: ${phoneNumber}`);
           client.emit('[whatsapp]sendVerifyPhones', {
             send: false,
             message: `El número ${phoneNumber} no está registrado en WhatsApp.`,
           });
-          continue;
+          return;
         }
 
-        // Enviar el mensaje
-        await session.sendMessage(
-          phoneNumber,
-          'Hola mensaje de prueba desde el servidor',
-        );
+        const messageText = `Estimado/a ${name}\n\n${message || ''}`;
+        await session.sendMessage(phoneNumber, messageText);
         console.log(`Mensaje enviado a: ${phoneNumber}`);
+
+        if (files && files.length > 0) {
+          await Promise.all(files.map((file) => sendFile(file, phoneNumber))); // Enviar archivos en paralelo
+        }
       } catch (error) {
         console.error(`Error al enviar el mensaje a: ${phoneNumber}`, error);
         client.emit('[whatsapp]sendVerifyPhones', {
@@ -181,17 +210,21 @@ export class WebsocketGateway
           message: `Error al enviar el mensaje a: ${phoneNumber}: ${error.message}`,
         });
       }
-    }
+    };
+
+    // Enviar mensajes y archivos a cada número de teléfono con su respectivo nombre
+    await Promise.all(
+      validPhones.map((phoneNumber, index) =>
+        sendMessageAndFiles(phoneNumber, names[index] || ''),
+      ),
+    );
 
     // Emitir confirmación de mensajes enviados
     client.emit('[whatsapp]sendVerifyPhones', {
       send: true,
-      message: 'Mensajes enviados',
+      message: 'Mensajes y archivos enviados',
     });
   }
-
-  @SubscribeMessage('[client]newLoan')
-  async NewLoan(@MessageBody() data: any, @ConnectedSocket() Client: Socket) {}
 
   @SubscribeMessage('[client]newIssues')
   async newIssues(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
@@ -246,7 +279,7 @@ export class WebsocketGateway
       message: 'El servidor se está reiniciando...',
     });
 
-    // Ejecutar un comando para reiniciar el proceso de Node.js
+    // Ejecutar un comando para reiniciar el proceso de Node.js usando PM2
     exec('pm2 restart all', (error, stdout, stderr) => {
       if (error) {
         console.error(`Error reiniciando el servidor: ${error.message}`);
@@ -254,6 +287,9 @@ export class WebsocketGateway
         return;
       }
 
+      client.emit('successRestartServer', {
+        message: 'Servidor reiniciado con éxito',
+      });
       console.log(`Servidor reiniciado con éxito: ${stdout}`);
     });
   }
