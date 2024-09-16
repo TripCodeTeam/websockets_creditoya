@@ -9,7 +9,6 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import WhatsAppSessionManager from 'src/lib/Whatsapp';
-import { exec } from 'child_process';
 import { MessageMedia } from 'whatsapp-web.js';
 
 @WebSocketGateway()
