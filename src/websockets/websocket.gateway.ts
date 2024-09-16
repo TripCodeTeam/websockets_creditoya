@@ -95,6 +95,29 @@ export class WebsocketGateway
     }
   }
 
+  @SubscribeMessage('deleteSession')
+  async handleDeleteSession(
+    @MessageBody() data: any,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const { sessionId } = data;
+
+    if (!this.whatsappSessionManager) {
+      client.emit('error', 'WhatsAppSessionManager is not initialized');
+      console.error('WhatsAppSessionManager is not initialized');
+      return;
+    }
+
+    try {
+      await this.whatsappSessionManager.delete(sessionId);
+      client.emit('sessionDeleted', { success: true });
+      console.log(`Session deleted with ID: ${sessionId}`);
+    } catch (error) {
+      console.error(`Error deleting session with ID: ${sessionId}`, error);
+      client.emit('error', `Failed to delete session with ID: ${sessionId}`);
+    }
+  }
+
   @SubscribeMessage('[whatsapp_client]entryNumbersPhone')
   async ReceivedPhones(
     @MessageBody() data: any,
@@ -264,33 +287,5 @@ export class WebsocketGateway
         message: `Error al enviar el mensaje a ${formattedPhone}: ${error.message}`,
       });
     }
-  }
-
-  // Evento para reiniciar el servidor
-  @SubscribeMessage('restartServer')
-  async handleRestartServer(
-    @MessageBody() data: any,
-    @ConnectedSocket() client: Socket,
-  ) {
-    console.log('Reinicio solicitado por el cliente:', data);
-
-    // Aquí emitimos una respuesta al cliente antes de proceder con el reinicio
-    client.emit('serverRestarting', {
-      message: 'El servidor se está reiniciando...',
-    });
-
-    // Ejecutar un comando para reiniciar el proceso de Node.js usando PM2
-    exec('pm2 restart all', (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error reiniciando el servidor: ${error.message}`);
-        client.emit('error', 'Error al intentar reiniciar el servidor');
-        return;
-      }
-
-      client.emit('successRestartServer', {
-        message: 'Servidor reiniciado con éxito',
-      });
-      console.log(`Servidor reiniciado con éxito: ${stdout}`);
-    });
   }
 }
