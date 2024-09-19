@@ -8,7 +8,10 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { MjmlService } from 'src/lib/mjmlToHtml';
+import { MailService } from 'src/lib/transporter';
 import WhatsAppSessionManager from 'src/lib/Whatsapp';
+import { ActiveAccountMail } from 'src/templates/InfoMail';
 import { MessageMedia } from 'whatsapp-web.js';
 
 @WebSocketGateway()
@@ -24,7 +27,10 @@ export class WebsocketGateway
 
   private whatsappSessionManager: WhatsAppSessionManager | null = null;
 
-  constructor() {
+  constructor(
+    private readonly mailService: MailService,
+    private readonly mjmlService: MjmlService,
+  ) {
     this.initialize()
       .then(() => {
         console.log('WhatsAppSessionManager initialized');
@@ -124,13 +130,13 @@ export class WebsocketGateway
   ) {
     console.log(data);
 
-    // Validar que `data` tenga la estructura esperada
     if (
       !data ||
       !data.sessionId ||
       !Array.isArray(data.phones) ||
       !Array.isArray(data.names) ||
-      !Array.isArray(data.files) // Asegúrate de validar que `files` es un array
+      !Array.isArray(data.files) ||
+      !Array.isArray(data.emails)
     ) {
       const errorMessage = 'Datos incompletos o formato incorrecto.';
       console.error(errorMessage, data);
@@ -141,28 +147,17 @@ export class WebsocketGateway
       return;
     }
 
-    const {
-      sessionId,
-      phones,
-      names,
-      message,
-      files, // `files` será un array de archivos en formato base64
-    }: {
-      sessionId: string;
-      phones: string[];
-      names: string[];
-      message?: string;
-      files: { name: string; type: string; data: string }[]; // Archivos en formato base64
-    } = data;
+    const { sessionId, phones, names, message, files, emails } = data;
 
     console.log(sessionId);
     console.log(phones);
     console.log(names);
     console.log(message);
     console.log(files);
+    console.log(emails);
 
-    // Obtener la sesión por ID
     const session = this.whatsappSessionManager.getSessionById(sessionId);
+
     if (!session || !session.info || !session.pupPage) {
       const sessionError = !session
         ? 'Sesión no encontrada.'
@@ -175,7 +170,6 @@ export class WebsocketGateway
       return;
     }
 
-    // Normalizar y validar números de teléfono
     const validPhones = phones
       .map((phoneNumber: string) =>
         phoneNumber.replace(/\s+/g, '').startsWith('+57')
@@ -185,11 +179,10 @@ export class WebsocketGateway
       .map((phoneNumber) => `${phoneNumber.replace('+', '')}@c.us`);
 
     const sendFile = async (
-      file: { name: string; type: string; data: string }, // Tipo compatible
+      file: { name: string; type: string; data: string },
       phoneNumber: string,
     ) => {
       try {
-        // Convertir base64 a Buffer
         const buffer = Buffer.from(file.data, 'base64');
         const media = new MessageMedia(
           file.type,
@@ -207,7 +200,11 @@ export class WebsocketGateway
       }
     };
 
-    const sendMessageAndFiles = async (phoneNumber: string, name: string) => {
+    const sendMessageAndFiles = async (
+      phoneNumber: string,
+      name: string,
+      email: string,
+    ) => {
       try {
         if (!(await session.isRegisteredUser(phoneNumber))) {
           console.error(`Número no registrado en WhatsApp: ${phoneNumber}`);
@@ -223,8 +220,26 @@ export class WebsocketGateway
         console.log(`Mensaje enviado a: ${phoneNumber}`);
 
         if (files && files.length > 0) {
-          await Promise.all(files.map((file) => sendFile(file, phoneNumber))); // Enviar archivos en paralelo
+          await Promise.all(files.map((file) => sendFile(file, phoneNumber)));
         }
+
+        const mjmlContent = ActiveAccountMail({ completeName: name, message });
+        const htmlContent = await this.mjmlService.convertToHTML(mjmlContent);
+
+        // Enviar correo electrónico usando MailService
+        await this.mailService.sendMail({
+          from: email, // Email desde donde se envía
+          to: email, // Email del destinatario
+          subject: 'Credito Ya te ha enviado una informacion',
+          html: htmlContent,
+          // text: `Hola ${name},\n\n${message || ''}`,
+          attachments: files.map((file) => ({
+            filename: file.name,
+            content: Buffer.from(file.data, 'base64'),
+            encoding: 'base64',
+          })),
+        });
+        console.log(`Correo enviado a: ${email}`);
       } catch (error) {
         console.error(`Error al enviar el mensaje a: ${phoneNumber}`, error);
         client.emit('[whatsapp]sendVerifyPhones', {
@@ -234,14 +249,16 @@ export class WebsocketGateway
       }
     };
 
-    // Enviar mensajes y archivos a cada número de teléfono con su respectivo nombre
     await Promise.all(
       validPhones.map((phoneNumber, index) =>
-        sendMessageAndFiles(phoneNumber, names[index] || ''),
+        sendMessageAndFiles(
+          phoneNumber,
+          names[index] || '',
+          emails[index] || '',
+        ),
       ),
     );
 
-    // Emitir confirmación de mensajes enviados
     client.emit('[whatsapp]sendVerifyPhones', {
       send: true,
       message: 'Mensajes y archivos enviados',

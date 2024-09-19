@@ -36,12 +36,12 @@ class WhatsAppSessionManager {
       const client = new Client({
         puppeteer: {
           headless: true,
-          executablePath: 'chromium-browser',
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-          ],
+          // executablePath: 'chromium-browser',
+          // args: [
+          //   '--no-sandbox',
+          //   '--disable-setuid-sandbox',
+          //   '--disable-dev-shm-usage',
+          // ],
         },
         authStrategy: new NoAuth(), // Usando NoAuth, sin persistencia
       });
