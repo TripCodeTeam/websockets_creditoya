@@ -8,8 +8,13 @@ export class MailService {
   private transporter: nodemailer.Transporter<SentMessageInfo>;
 
   constructor(private configService: ConfigService) {
-    const email = this.configService.get<string>('GOOGLE_EMAIL');
-    const pass = this.configService.get<string>('GOOGLE_APP_KEY');
+
+    // load .env with method of nestjs
+    // const email = this.configService.get<string>('GOOGLE_EMAIL');
+    // const pass = this.configService.get<string>('GOOGLE_APP_KEY');
+
+    const email = process.env.GOOGLE_EMAIL as string;
+    const pass = process.env.GOOGLE_APP_KEY as string;
 
     if (!email || !pass) {
       throw new Error('Email and password must be defined');
